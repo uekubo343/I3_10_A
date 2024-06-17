@@ -13,26 +13,18 @@
 
 int bandpass(long n, unsigned char *buffer);
 
+char use_bandpass;
+
 void *send_audio(void *arg) {
   int sock = *((int *)arg);
   unsigned char* buffer = malloc(sizeof(unsigned char) * BUFFER_SIZE);
   while (1) {
       ssize_t num_read = read(STDIN_FILENO, buffer, BUFFER_SIZE);
       if (num_read <= 0) break;
+      if(use_bandpass) bandpass(BUFFER_SIZE, buffer);
       send(sock, buffer, num_read, 0);
   }
-  return NULL;
-}
-
-void *send_audio2(void *arg) {
-  int sock = *((int *)arg);
-  unsigned char* buffer = malloc(sizeof(unsigned char) * BUFFER_SIZE);
-  while (1) {
-      ssize_t num_read = read(STDIN_FILENO, buffer, BUFFER_SIZE);
-      if (num_read <= 0) break;
-      bandpass(BUFFER_SIZE, buffer);
-      send(sock, buffer, num_read, 0);
-  }
+  free(buffer);
   return NULL;
 }
 
@@ -42,20 +34,10 @@ void *receive_audio(void *arg) {
   while (1) {
     ssize_t num_received = recv(sock, buffer, BUFFER_SIZE, 0);
     if (num_received <= 0) break;
+    if(use_bandpass) bandpass(BUFFER_SIZE, buffer);
     write(STDOUT_FILENO, buffer, num_received);
   }
-  return NULL;
-}
-
-void *receive_audio2(void *arg) {
-  int sock = *((int *)arg);
-  unsigned char* buffer = malloc(sizeof(unsigned char) * BUFFER_SIZE);
-  while (1) {
-    ssize_t num_received = recv(sock, buffer, BUFFER_SIZE, 0);
-    if (num_received <= 0) break;
-    bandpass(BUFFER_SIZE, buffer);
-    write(STDOUT_FILENO, buffer, num_received);
-  }
+  free(buffer);
   return NULL;
 }
 
@@ -123,33 +105,18 @@ int main(int argc, char *argv[]) {
 
   pthread_t send_thread, receive_thread;
 
-  char use_bandpass = 1;  //  フィルタをかける場合1、かけない場合0
+  use_bandpass = 1;  //  フィルタをかける場合1、かけない場合0で分ける
 
-  if (use_bandpass) {
-    if (pthread_create(&send_thread, NULL, send_audio2, &sock) != 0) {
-        perror("pthread_create send_audio");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
-    if (pthread_create(&receive_thread, NULL, receive_audio2, &sock) != 0) {
-        perror("pthread_create receive_audio");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
+  if (pthread_create(&send_thread, NULL, send_audio, &sock) != 0) {
+      perror("pthread_create send_audio");
+      close(sock);
+      exit(EXIT_FAILURE);
   }
-  else {
-    if (pthread_create(&send_thread, NULL, send_audio, &sock) != 0) {
-        perror("pthread_create send_audio");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
 
-    if (pthread_create(&receive_thread, NULL, receive_audio, &sock) != 0) {
-        perror("pthread_create receive_audio");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
+  if (pthread_create(&receive_thread, NULL, receive_audio, &sock) != 0) {
+      perror("pthread_create receive_audio");
+      close(sock);
+      exit(EXIT_FAILURE);
   }
 
   pthread_join(send_thread, NULL);

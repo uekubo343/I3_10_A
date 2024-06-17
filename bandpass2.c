@@ -1,18 +1,3 @@
-/* 
- * bandpass.c
- * 使い方
- *   ./fft n a b
- * 
- * 以下を繰り返す:
- *   標準入力から, 16 bit integerをn個読む
- *   FFTする
- *   周波数fが a<f<b を満たす周波数成分だけ残す
- *   逆FFTする
- *   標準出力へ出す
- *
- * したがってバンドパスフィルタになる
- * 
- */
 #include <assert.h>
 #include <complex.h>
 #include <math.h>
@@ -21,7 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-typedef unsigned char sample_t;
+typedef unsigned char sample_t; // 互換性のため、unsigned char型で取り扱う。
 
 void die(char * s) {
   perror(s); 
@@ -29,17 +14,13 @@ void die(char * s) {
 }
 
 /* 標本(整数)を複素数へ変換 */
-void sample_to_complex(sample_t * s, 
-		       complex double * X, 
-		       long n) {
+void sample_to_complex(sample_t * s, complex double * X, long n) {
   long i;
   for (i = 0; i < n; i++) X[i] = s[i];
 }
 
 /* 複素数を標本(整数)へ変換. 虚数部分は無視 */
-void complex_to_sample(complex double * X, 
-		       sample_t * s, 
-		       long n) {
+void complex_to_sample(complex double * X, sample_t * s, long n) {
   long i;
   for (i = 0; i < n; i++) {
     s[i] = creal(X[i]);
@@ -53,10 +34,7 @@ void complex_to_sample(complex double * X,
    xが入力でyが出力.
    xも破壊される
  */
-void fft_r(complex double * x, 
-	   complex double * y, 
-	   long n, 
-	   complex double w) {
+void fft_r(complex double * x, complex double * y, long n, complex double w) {
   if (n == 1) { y[0] = x[0]; }
   else {
     complex double W = 1.0; 
@@ -75,9 +53,7 @@ void fft_r(complex double * x,
   }
 }
 
-void fft(complex double * x, 
-	 complex double * y, 
-	 long n) {
+void fft(complex double * x, complex double * y, long n) {
   long i;
   double arg = 2.0 * M_PI / n;
   complex double w = cos(arg) - 1.0j * sin(arg);
@@ -85,9 +61,7 @@ void fft(complex double * x,
   for (i = 0; i < n; i++) y[i] /= n;
 }
 
-void ifft(complex double * y, 
-	  complex double * x, 
-	  long n) {
+void ifft(complex double * y, complex double * x, long n) {
   double arg = 2.0 * M_PI / n;
   complex double w = cos(arg) + 1.0j * sin(arg);
   fft_r(y, x, n, w);
@@ -120,19 +94,18 @@ int bandpass(long n, unsigned char *buf) {
     // 周波数の重心を計算
     double integral1 = 0;
     double integral2 = 0;
-    for (int l = 1; l < n; ++l) {
+    for (int l = 0; l < n; ++l) {
       integral1 += l * cabs(Y[l]) / n/2;
       integral2 += cabs(Y[l]) / n/2;
     }
 
     double g_l = integral1/integral2; // 重心
-    double a = 0.1*g_l; // 下限
-    double b = 1.5*g_l; // 上限
-    
-    // 重心の上下をカット＋音声が小さくなるので少し大きくする
+    double a = 0.1*g_l;
+    double b = 1.5*g_l;
+
     for (int l = 0; l < n; ++l) {
-      if (l >= a && l <= b) Y[l] *= 1.2;
-      else Y[l] = 0;
+      if (l >= a && l <= b) Y[l] *= 1.5;  // カットした分音量を少し上げる
+      else Y[l] = 0;  // 重心の上下をカット
     }
 
     /* IFFT -> Z */
@@ -140,6 +113,9 @@ int bandpass(long n, unsigned char *buf) {
     /* 標本の配列に変換 */
     complex_to_sample(X, buf, n);
   }
+
+  free(X);
+  free(Y);
 
   return 0;
 }
